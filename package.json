@@ -1,0 +1,31 @@
+{
+  "name": "threejs-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon server",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deep9888/ikarus3dviewerbackend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/deep9888/ikarus3dviewerbackend/issues"
+  },
+  "homepage": "https://github.com/deep9888/ikarus3dviewerbackend#readme",
+  "dependencies": {
+    "aws-sdk": "^2.1189.0",
+    "axios": "^0.27.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.1",
+    "express": "^4.18.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.19"
+  }
+}
