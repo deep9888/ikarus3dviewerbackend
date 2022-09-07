@@ -2,22 +2,9 @@ const express = require('express');
 const app = express();
 require('dotenv').config();
 const AWS = require('aws-sdk');
-const formidable = require('formidable');
 const cors = require('cors');
-
-
-const multer = require('multer');
-const storage = multer.memoryStorage() ;
-let upload = multer({
-    storage,
-    fileFilter: (req, file, cb) => {
-        //if (mimeTypes.includes(file.mimetype)) {
-          return cb(null, true);
-        //}
-        //cb('File type not allowed', false);
-    }
-}).any();
-
+const upload = require("express-fileupload");
+app.use(upload());
 
 
 const PORT = 3031;
@@ -110,31 +97,28 @@ app.post('/login', async (req, res) => {
     // })
 })
 
-app.get('/files/:v', async (req, res) => {
+app.post('/files/:v', async (req, res) => {
     const v = req.params.v;
-    console.log('v: ', v);
     const params = {
-        KeyConditionExpression: "id = :s",
+        KeyConditionExpression: "Id = :s",
         ExpressionAttributeValues: {
             ":s": v
         },
-        ProjectionExpression: "id, #URL, annotation",
+        ProjectionExpression: "Id, #URL, annotation",
         ExpressionAttributeNames: {
             "#URL": "URL"
         },
-        TableName: "testing"
+        TableName: "glb-annotations"
     }
-    console.log(params);
     let data;
     docClient.query(params, function (err, fetchedData) {
         if (err) {
             console.log("Error", err);
         } else {
             data = fetchedData
+            res.status(200).json({d:data});
         }
     })
-    console.log(data);
-    res.json(data)
 })
 
 app.post('/signup', express.json(), (req, res) => {
@@ -158,7 +142,6 @@ app.post('/signup', express.json(), (req, res) => {
     };
     docClient.put(signUpUserDetails, function (err, data) {
         if (err && err.code === "ConditionalCheckFailedException") {
-            console.log("Wrong Email or password")
             return res.status(401).json({
                 msg: "Not account with this email."
             });
@@ -175,12 +158,10 @@ app.post('/saveDB', express.json(), (req, res) => {
     const id = uuidv4();
     const annotation = req.body.annotations;
     const url = req.body.URL;
-    //uniqueID.push(id);
-
     var params3 = {
-        TableName: 'testing',
+        TableName: 'glb-annotations',
         Item: {
-            id: id,
+            Id: id,
             annotation: annotation,
             URL: url
         },
@@ -192,60 +173,32 @@ app.post('/saveDB', express.json(), (req, res) => {
     res.send('Saved Successfully');
 })
 app.post('/saveGLB', (req, res) => {
+    const file = req.files;
+    let preSignedURL;
+    const params = {
+        Body: file.sendFile.data,
+        Bucket: process.env.BUCKET_NAME,
+        Key: req.body.sendFileName
+    }
 
-    // const form = formidable({
-    //     multiples: true
-    // });
-    // form.parse(req, (err, fields, files) => {
-    //     // console.log('fields: ', fields);
-    //     console.log(files['sendFile']);
-
-    //     // const params = {
-    //     //     Body: files.sendFile,
-    //     //     Bucket: process.env.BUCKET_NAME,
-    //     //     Key: fields.sendFileName
-    //     // }
-    //     // console.log(files.sendFile);
-    //     // const uploadData = s3.upload(params).promise();
-    //     // uploadData.then(function (result) {
-    //     //     console.log('RESULT ========== ', result.Location);
-    //     //     preSignedURL = result.Location;
-    //     // })
-
-    //     res.send({
-    //         success: true
-    //     });
-
-
-    // });
-
-    upload(req, res, (err) => {
-        if (err) {
-            // An error occurred when uploading to server memory
-            return res.status(502).json(err) ;
-        }
-        console.log(req.body.sendFileName);
-        console.log(req.files[0])
-
-        
-        
-        const params = {
-            Body: req.files[0],
-            Bucket: process.env.BUCKET_NAME,
-            Key: req.body.sendFileName
-        }
-        
-        const uploadData = s3.upload(params).promise();
-        uploadData.then(function (result) {
-            console.log('RESULT ========== ', result.Location);
-            preSignedURL = result.Location;
-        })
-
-            res.send({
-            success: true
-        });
+    const uploadData = s3.upload(params).promise();
+    uploadData.then(function (result) {
+        preSignedURL = result.Location;
+        res.status(200).json({url:preSignedURL})    
     })
-    
+})
+app.post('/scanResult', async (req,res)=>{
+    let scanResults = [];
+    var params = {
+        TableName: 'glb-annotations',
+        ProjectionExpression: 'Id'
+    };
+    let items;
+    items = await docClient.scan(params).promise();
+    for (let i = 0; i < items.Items.length; i++) {
+        scanResults.push(items.Items[i].Id)
+    }
+    res.status(200).json({results:scanResults}) 
 })
 
 
