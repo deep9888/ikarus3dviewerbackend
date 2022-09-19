@@ -8,9 +8,7 @@ app.use(upload());
 
 
 const PORT = 3031;
-const {
-    v4: uuidv4
-} = require('uuid');
+
 app.use(cors());
 app.use(express.json());
 
@@ -97,8 +95,8 @@ app.post('/login', async (req, res) => {
     // })
 })
 
-app.post('/files/:v', async (req, res) => {
-    const v = req.params.v;
+app.post('/files/:fileUUID', async (req, res) => {
+    const v = req.params.fileUUID;
     const params = {
         KeyConditionExpression: "Id = :s",
         ExpressionAttributeValues: {
@@ -153,17 +151,18 @@ app.post('/signup', express.json(), (req, res) => {
         });
     });
 })
-app.post('/saveDB', express.json(), (req, res) => {
-    console.log('click');
-    const id = uuidv4();
+app.put('/saveDB', express.json(), (req, res) => {
+    const id = req.body.Id;
     const annotation = req.body.annotations;
     const url = req.body.URL;
+    const fileName = req.body.FileName;
     var params3 = {
         TableName: 'glb-annotations',
         Item: {
             Id: id,
             annotation: annotation,
-            URL: url
+            URL: url,
+            FileName: fileName
         },
     };
     docClient.put(params3, function (err, data) {
@@ -172,7 +171,43 @@ app.post('/saveDB', express.json(), (req, res) => {
     });
     res.send('Saved Successfully');
 })
-app.post('/saveGLB', (req, res) => {
+app.post('/deleteDB', async (req, res) => {
+    const id = req.body.idUUID;
+
+    // // Get the current list
+    // var listParams = {
+    //     TableName: 'glb-annotations',
+    //     Key: {
+    //         'Id': id
+    //     }
+    // }
+    var params = {
+        Key: {
+        "Id": "c074fc2d-f0f6-4eb2-9c33-cd184ccfaed2"
+        }, 
+        TableName: "glb-annotations"
+    };
+    var records = await docClient.get(params).promise();
+    console.log(records.Item.annotation)
+    // const annotation = req.body.annotations;
+    // const url = req.body.URL;
+    // const fileName = req.body.FileName;
+    // var params3 = {
+    //     TableName: 'glb-annotations',
+    //     Item: {
+    //         Id: id,
+    //         annotation: annotation,
+    //         URL: url,
+    //         FileName: fileName
+    //     },
+    // };
+    // docClient.put(params3, function (err, data) {
+    //     if (err) console.log('e==========', err)
+    //     else console.log('d============', data)
+    // });
+    res.send('Saved Successfully');
+})
+app.post('/saveModelsFiles', (req, res) => {
     const file = req.files;
     let preSignedURL;
     const params = {
@@ -188,17 +223,20 @@ app.post('/saveGLB', (req, res) => {
     })
 })
 app.post('/scanResult', async (req,res)=>{
-    let scanResults = [];
+    let scanFileName = [];
+    let scanFileID = [];
     var params = {
         TableName: 'glb-annotations',
-        ProjectionExpression: 'Id'
+        ProjectionExpression: 'Id, FileName'
     };
     let items;
     items = await docClient.scan(params).promise();
+
     for (let i = 0; i < items.Items.length; i++) {
-        scanResults.push(items.Items[i].Id)
+        scanFileName.push(items.Items[i].FileName);
+        scanFileID.push(items.Items[i].Id);
     }
-    res.status(200).json({results:scanResults}) 
+    res.status(200).json({Id:scanFileID,fileName:scanFileName}) 
 })
 
 
