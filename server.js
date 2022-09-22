@@ -1,11 +1,15 @@
 const express = require('express');
 const app = express();
 require('dotenv').config();
+
 const AWS = require('aws-sdk');
+
 const cors = require('cors');
+
 const upload = require("express-fileupload");
 app.use(upload());
 
+const _ = require('lodash');
 
 const PORT = 3031;
 
@@ -25,6 +29,9 @@ const s3 = new AWS.S3({
 });
 
 const docClient = new AWS.DynamoDB.DocumentClient();
+
+
+let annotationStorage = {};
 
 app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -96,11 +103,11 @@ app.post('/login', async (req, res) => {
 })
 
 app.post('/files/:fileUUID', async (req, res) => {
-    const v = req.params.fileUUID;
+    const fileUUID = req.params.fileUUID;
     const params = {
         KeyConditionExpression: "Id = :s",
         ExpressionAttributeValues: {
-            ":s": v
+            ":s": fileUUID
         },
         ProjectionExpression: "Id, #URL, annotation",
         ExpressionAttributeNames: {
@@ -154,69 +161,65 @@ app.post('/signup', express.json(), (req, res) => {
 app.put('/saveDB', express.json(), (req, res) => {
     const id = req.body.Id;
     const annotation = req.body.annotations;
+    const textFieldId = req.body.textFieldId;
     const url = req.body.URL;
     const fileName = req.body.FileName;
-    var params3 = {
+
+    // using lodash module to push only unique value in array suppose user clicks twice on save button then it stores only one value if text are same
+    if (_.find(annotationStorage, annotation) == null) {
+        annotationStorage = {...annotationStorage, [`${textFieldId}`]: {annotation}}
+    }
+    
+    const annotationStorageParams = {
         TableName: 'glb-annotations',
         Item: {
             Id: id,
-            annotation: annotation,
+            annotation: annotationStorage,
             URL: url,
             FileName: fileName
         },
     };
-    docClient.put(params3, function (err, data) {
+    
+    docClient.put(annotationStorageParams, function (err, data) {
         if (err) console.log('e==========', err)
         else console.log('d============', data)
     });
     res.send('Saved Successfully');
 })
-app.post('/deleteDB', async (req, res) => {
-    const id = req.body.idUUID;
-
-    // // Get the current list
-    // var listParams = {
-    //     TableName: 'glb-annotations',
-    //     Key: {
-    //         'Id': id
-    //     }
-    // }
-    var params = {
-        Key: {
-        "Id": "c074fc2d-f0f6-4eb2-9c33-cd184ccfaed2"
-        }, 
-        TableName: "glb-annotations"
+app.post('/deleteDB', (req, res) => {
+    const id = req.body.id;
+    const textFieldIndex = req.body.textFieldIndex;
+    console.log(textFieldIndex)
+    const annotationDeleteParams = {     
+        TableName : "glb-annotations",
+        Key : {
+            "Id": id
+        },
+        UpdateExpression : `REMOVE annotation.${String(textFieldIndex)}`,
+        
+        ReturnValues : "UPDATED_OLD"
     };
-    var records = await docClient.get(params).promise();
-    console.log(records.Item.annotation)
-    // const annotation = req.body.annotations;
-    // const url = req.body.URL;
-    // const fileName = req.body.FileName;
-    // var params3 = {
-    //     TableName: 'glb-annotations',
-    //     Item: {
-    //         Id: id,
-    //         annotation: annotation,
-    //         URL: url,
-    //         FileName: fileName
-    //     },
-    // };
-    // docClient.put(params3, function (err, data) {
-    //     if (err) console.log('e==========', err)
-    //     else console.log('d============', data)
-    // });
-    res.send('Saved Successfully');
+
+    docClient.update(annotationDeleteParams, function(err, data){
+        if(err){
+            console.log(err)
+        }else{
+            const returnDeleteKey = Object.keys(data.Attributes.annotation);
+            delete annotationStorage[returnDeleteKey]
+            res.status(200).json({data:data});
+        }
+    })
 })
 app.post('/saveModelsFiles', (req, res) => {
     const file = req.files;
     let preSignedURL;
-    const params = {
+    const uploadDataParams = {
         Body: file.sendFile.data,
         Bucket: process.env.BUCKET_NAME,
         Key: req.body.sendFileName
     }
 
-    const uploadData = s3.upload(params).promise();
+    const uploadData = s3.upload(uploadDataParams).promise();
     uploadData.then(function (result) {
         preSignedURL = result.Location;
         res.status(200).json({url:preSignedURL})    
@@ -225,12 +228,12 @@ app.post('/saveModelsFiles', (req, res) => {
 app.post('/scanResult', async (req,res)=>{
     let scanFileName = [];
     let scanFileID = [];
-    var params = {
+    var tableScanParams = {
         TableName: 'glb-annotations',
         ProjectionExpression: 'Id, FileName'
     };
     let items;
-    items = await docClient.scan(params).promise();
+    items = await docClient.scan(tableScanParams).promise();
 
     for (let i = 0; i < items.Items.length; i++) {
         scanFileName.push(items.Items[i].FileName);
