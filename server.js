@@ -188,14 +188,14 @@ app.put('/saveDB', express.json(), (req, res) => {
 })
 app.post('/deleteDB', (req, res) => {
     const id = req.body.id;
-    const textFieldIndex = req.body.textFieldIndex;
-    console.log(textFieldIndex)
+    const textFieldId = req.body.textFieldId;
+    console.log(textFieldId)
     const annotationDeleteParams = {     
         TableName : "glb-annotations",
         Key : {
             "Id": id
         },
-        UpdateExpression : `REMOVE annotation.${String(textFieldIndex)}`,
+        UpdateExpression : `REMOVE annotation.${String(textFieldId)}`,
         
         ReturnValues : "UPDATED_OLD"
     };
